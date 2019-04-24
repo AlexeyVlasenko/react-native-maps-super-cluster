@@ -52,16 +52,20 @@ export default class ClusteredMapView extends PureComponent {
       LayoutAnimation.configureNext(this.props.layoutAnimationConf)
   }
 
-  mapRef = (ref) => {
+  mapRef(ref) {
     this.mapview = ref
   }
 
-  getMapRef = () => this.mapview
+  getMapRef() {
+    return this.mapview
+  }
 
-  getClusteringEngine = () => this.index
+  getClusteringEngine() {
+    return this.index
+  }
 
-  clusterize = (dataset) => {
-    this.index = SuperCluster({ // eslint-disable-line new-cap
+  clusterize(dataset) {
+    this.index = new SuperCluster({ // eslint-disable-line new-cap
       extent: this.props.extent,
       minZoom: this.props.minZoom,
       maxZoom: this.props.maxZoom,
@@ -69,7 +73,7 @@ export default class ClusteredMapView extends PureComponent {
     })
 
     // get formatted GeoPoints for cluster
-    const rawData = dataset.map(itemToGeoJSONFeature)
+    const rawData = dataset.map(item => itemToGeoJSONFeature(item, this.props.accessor))
 
     // load geopoints into SuperCluster
     this.index.load(rawData)
@@ -78,28 +82,25 @@ export default class ClusteredMapView extends PureComponent {
     this.setState({ data })
   }
 
-  clustersChanged = (nextState) => this.state.data.length !== nextState.data.length
-
-  onRegionChangeComplete = (region) => {
-    let data
-    if (region.longitudeDelta <= 80) {
-      data = this.getClusters(region)
-      this.setState({ region, data }, () => {
-        this.props.onRegionChangeComplete && this.props.onRegionChangeComplete(region, data)
-      })
-    } else {
-      this.props.onRegionChangeComplete && this.props.onRegionChangeComplete(region, data)
-    }
+  clustersChanged(nextState) {
+    return this.state.data.length !== nextState.data.length
   }
 
-  getClusters = (region) => {
+  onRegionChangeComplete(region) {
+    let data = this.getClusters(region)
+    this.setState({ region, data }, () => {
+        this.props.onRegionChangeComplete && this.props.onRegionChangeComplete(region, data)
+    })
+  }
+
+  getClusters(region) {
     const bbox = regionToBoundingBox(region),
-        viewport = (region.longitudeDelta) >= 40 ? { zoom: this.props.minZoom } : GeoViewport.viewport(bbox, this.dimensions)
+          viewport = (region.longitudeDelta) >= 40 ? { zoom: this.props.minZoom } : GeoViewport.viewport(bbox, this.dimensions)
 
     return this.index.getClusters(bbox, viewport.zoom)
   }
 
-  onClusterPress = (cluster) => {
+  onClusterPress(cluster) {
 
     // cluster press behavior might be extremely custom.
     if (!this.props.preserveClusterPressBehavior) {
@@ -112,58 +113,53 @@ export default class ClusteredMapView extends PureComponent {
     // //////////////////////////////////////////////////////////////////////////////////
     // get cluster children
     const children = this.index.getLeaves(cluster.properties.cluster_id, this.props.clusterPressMaxChildren),
-        markers = children.map(c => c.properties.item)
+          markers = children.map(c => c.properties.item)
 
     // fit right around them, considering edge padding
-    this.mapview.fitToCoordinates(markers.map(m => m), { edgePadding: this.props.edgePadding })
+    this.mapview.fitToCoordinates(markers.map(m => m.location), { edgePadding: this.props.edgePadding })
 
     this.props.onClusterPress && this.props.onClusterPress(cluster.properties.cluster_id, markers)
   }
 
   render() {
-    return (
-        <MapView
-            { ...this.props}
-            ref={this.mapRef}
-            onRegionChangeComplete={this.onRegionChangeComplete}>
-          {
-            this.props.clusteringEnabled && this.state.data.map((d) => {
-              if (d.properties.point_count === 0)
-                return this.props.renderMarker(d.properties.item)
+    const { style, ...props } = this.props
 
-              return (
-                  <ClusterMarker
-                      {...d}
-                      onPress={this.onClusterPress}
-                      textStyle={this.props.textStyle}
-                      scaleUpRatio={this.props.scaleUpRatio}
-                      renderCluster={this.props.renderCluster}
-                      key={`cluster-${d.properties.cluster_id}`}
-                      containerStyle={this.props.containerStyle}
-                      clusterInitialFontSize={this.props.clusterInitialFontSize}
-                      clusterInitialDimension={this.props.clusterInitialDimension} />
-              )
-            })
-          }
-          {
-            !this.props.clusteringEnabled && this.props.data.map(d => this.props.renderMarker(d))
-          }
-          {this.props.children}
-        </MapView>
+    return (
+      <MapView
+        {...props}
+        style={style}
+        ref={this.mapRef}
+        onRegionChangeComplete={this.onRegionChangeComplete}>
+        {
+          this.props.clusteringEnabled && this.state.data.map((d) => {
+            if (d.properties.point_count === 0)
+              return this.props.renderMarker(d.properties.item)
+
+            return (
+              <ClusterMarker
+                {...d}
+                onPress={this.onClusterPress}
+                renderCluster={this.props.renderCluster}
+                key={`cluster-${d.properties.cluster_id}`} />
+            )
+          })
+        }
+        {
+          !this.props.clusteringEnabled && this.props.data.map(d => this.props.renderMarker(d))
+        }
+        {this.props.children}
+      </MapView>
     )
   }
 }
 
 ClusteredMapView.defaultProps = {
   minZoom: 1,
-  maxZoom: 20,
+  maxZoom: 16,
   extent: 512,
-  textStyle: {},
-  containerStyle: {},
+  accessor: 'location',
   animateClusters: true,
   clusteringEnabled: true,
-  clusterInitialFontSize: 12,
-  clusterInitialDimension: 30,
   clusterPressMaxChildren: 100,
   preserveClusterPressBehavior: true,
   width: Dimensions.get('window').width,
@@ -181,26 +177,23 @@ ClusteredMapView.propTypes = {
   extent: PropTypes.number.isRequired,
   minZoom: PropTypes.number.isRequired,
   maxZoom: PropTypes.number.isRequired,
-  clusterInitialFontSize: PropTypes.number.isRequired,
   clusterPressMaxChildren: PropTypes.number.isRequired,
-  clusterInitialDimension: PropTypes.number.isRequired,
   // array
   data: PropTypes.array.isRequired,
   // func
   onExplode: PropTypes.func,
   onImplode: PropTypes.func,
-  scaleUpRatio: PropTypes.func,
-  renderCluster: PropTypes.func,
   onClusterPress: PropTypes.func,
   renderMarker: PropTypes.func.isRequired,
+  renderCluster: PropTypes.func.isRequired,
   // bool
   animateClusters: PropTypes.bool.isRequired,
   clusteringEnabled: PropTypes.bool.isRequired,
   preserveClusterPressBehavior: PropTypes.bool.isRequired,
   // object
-  textStyle: PropTypes.object,
-  containerStyle: PropTypes.object,
   layoutAnimationConf: PropTypes.object,
   edgePadding: PropTypes.object.isRequired,
   // string
+  // mutiple
+  accessor: PropTypes.oneOfType([PropTypes.string, PropTypes.func])
 }
