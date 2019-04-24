@@ -89,13 +89,13 @@ export default class ClusteredMapView extends PureComponent {
   onRegionChangeComplete(region) {
     let data = this.getClusters(region)
     this.setState({ region, data }, () => {
-        this.props.onRegionChangeComplete && this.props.onRegionChangeComplete(region, data)
+      this.props.onRegionChangeComplete && this.props.onRegionChangeComplete(region, data)
     })
   }
 
   getClusters(region) {
     const bbox = regionToBoundingBox(region),
-          viewport = (region.longitudeDelta) >= 40 ? { zoom: this.props.minZoom } : GeoViewport.viewport(bbox, this.dimensions)
+        viewport = (region.longitudeDelta) >= 40 ? { zoom: this.props.minZoom } : GeoViewport.viewport(bbox, this.dimensions)
 
     return this.index.getClusters(bbox, viewport.zoom)
   }
@@ -113,10 +113,10 @@ export default class ClusteredMapView extends PureComponent {
     // //////////////////////////////////////////////////////////////////////////////////
     // get cluster children
     const children = this.index.getLeaves(cluster.properties.cluster_id, this.props.clusterPressMaxChildren),
-          markers = children.map(c => c.properties.item)
+        markers = children.map(c => c.properties.item)
 
     // fit right around them, considering edge padding
-    this.mapview.fitToCoordinates(markers.map(m => m.location), { edgePadding: this.props.edgePadding })
+    this.mapview.fitToCoordinates(markers.map(m => { return {latitude: m.latitude, longitude: m.longitude}}), { edgePadding: this.props.edgePadding })
 
     this.props.onClusterPress && this.props.onClusterPress(cluster.properties.cluster_id, markers)
   }
@@ -125,30 +125,30 @@ export default class ClusteredMapView extends PureComponent {
     const { style, ...props } = this.props
 
     return (
-      <MapView
-        {...props}
-        style={style}
-        ref={this.mapRef}
-        onRegionChangeComplete={this.onRegionChangeComplete}>
-        {
-          this.props.clusteringEnabled && this.state.data.map((d) => {
-            if (d.properties.point_count === 0)
-              return this.props.renderMarker(d.properties.item)
+        <MapView
+            {...props}
+            style={style}
+            ref={this.mapRef}
+            onRegionChangeComplete={this.onRegionChangeComplete}>
+          {
+            this.props.clusteringEnabled && this.state.data.map((d) => {
+              if (d.properties.point_count === 0)
+                return this.props.renderMarker(d.properties.item)
 
-            return (
-              <ClusterMarker
-                {...d}
-                onPress={this.onClusterPress}
-                renderCluster={this.props.renderCluster}
-                key={`cluster-${d.properties.cluster_id}`} />
-            )
-          })
-        }
-        {
-          !this.props.clusteringEnabled && this.props.data.map(d => this.props.renderMarker(d))
-        }
-        {this.props.children}
-      </MapView>
+              return (
+                  <ClusterMarker
+                      {...d}
+                      onPress={this.onClusterPress}
+                      renderCluster={this.props.renderCluster}
+                      key={`cluster-${d.properties.cluster_id}`} />
+              )
+            })
+          }
+          {
+            !this.props.clusteringEnabled && this.props.data.map(d => this.props.renderMarker(d))
+          }
+          {this.props.children}
+        </MapView>
     )
   }
 }
